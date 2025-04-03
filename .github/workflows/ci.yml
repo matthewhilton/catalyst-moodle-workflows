@@ -26,6 +26,10 @@ on:
         type: boolean
         description: 'If true, this will skip testing phpdocs'
         default: false
+      disable_phpdcs:
+        type: boolean
+        description: 'If true, this will skip testing php code standards'
+        default: false
       disable_phpunit:
         type: boolean
       disable_grunt:
