@@ -313,31 +313,34 @@ jobs:
           set -euo pipefail
           failed=0
           read_version() {
-            grep -oP '\$plugin->version\s*=\s*\K[0-9]+' "$1" || echo "unknown"
+            grep -oP '\$plugin->version\s*=\s*\K[0-9]+' "$1" 2>/dev/null || echo "none"
           }
           while IFS= read -r rel; do
-            echo "::group::Checking ${rel}"
+            label="${rel}"
+            if [ "${rel}" = "." ]; then label="root plugin"; fi
+            echo "::group::Checking ${label}"
             if [ -f "base/${rel}/version.php" ]; then
               old=$(read_version "base/${rel}/version.php")
               new=$(read_version "head/${rel}/version.php")
               if moodle-plugin-ci version "head/${rel}" --baseline-dir "base/${rel}" --version-policy "${VERSION_POLICY}"; then
-                echo "::notice file=head/${rel}/version.php,title=Version PASS::${rel} - version was ${old}, is now ${new}"
+                echo "::notice file=head/${rel}/version.php,title=Version PASS::Version PASS - ${label}: checked version, was ${old}, now ${new}"
               else
-                echo "::error file=head/${rel}/version.php,title=Version FAIL::${rel} - version was ${old}, is now ${new}. See the moodle-plugin-ci output above."
+                echo "::error file=head/${rel}/version.php,title=Version FAIL::Version FAIL - ${label}: was ${old}, now ${new}, did not meet the ${VERSION_POLICY} version policy"
                 failed=1
               fi
             else
+              new=$(read_version "head/${rel}/version.php")
               if moodle-plugin-ci version "head/${rel}"; then
-                echo "::notice title=Version PASS::${rel} - new plugin, no baseline to compare"
+                echo "::notice title=Version PASS::Version PASS - ${label}: new plugin, version is ${new}"
               else
-                echo "::error title=Version FAIL::${rel} - version check failed, see the moodle-plugin-ci output above"
+                echo "::error title=Version FAIL::Version FAIL - ${label}: new plugin, version ${new} did not pass the version check"
                 failed=1
               fi
             fi
-            if php ci/.github/scripts/check-release.php "head/${rel}" --release-policy="${RELEASE_POLICY}"; then
-              echo "::notice title=Release PASS::${rel}"
+            if reason=$(php ci/.github/scripts/check-release.php "head/${rel}" --release-policy="${RELEASE_POLICY}" 2>&1); then
+              echo "::notice title=Release PASS::Release PASS - ${label}: release check (policy ${RELEASE_POLICY}) passed"
             else
-              echo "::error title=Release FAIL::${rel} - see the check-release output above"
+              echo "::error title=Release FAIL::Release FAIL - ${label}: ${reason}"
               failed=1
             fi
             echo "::endgroup::"
