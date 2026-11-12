@@ -315,35 +315,45 @@ jobs:
           read_version() {
             grep -oP '\$plugin->version\s*=\s*\K[0-9]+' "$1" 2>/dev/null || echo "none"
           }
+          {
+            echo "## Version and release checks"
+            echo ""
+            echo "| Plugin | Check | Result |"
+            echo "| --- | --- | --- |"
+          } >> "${GITHUB_STEP_SUMMARY}"
           while IFS= read -r rel; do
             label="${rel}"
             if [ "${rel}" = "." ]; then label="root plugin"; fi
-            echo "::group::Checking ${label}"
             if [ -f "base/${rel}/version.php" ]; then
               old=$(read_version "base/${rel}/version.php")
               new=$(read_version "head/${rel}/version.php")
               if moodle-plugin-ci version "head/${rel}" --baseline-dir "base/${rel}" --version-policy "${VERSION_POLICY}"; then
-                echo "::notice file=head/${rel}/version.php,title=Version PASS::Version PASS - ${label}: checked version, was ${old}, now ${new}"
+                echo "::notice file=head/${rel}/version.php,title=Version PASS::Version PASS - ${label}: was ${old}, now ${new}"
+                echo "| ${label} | Version | PASS - was ${old}, now ${new} |" >> "${GITHUB_STEP_SUMMARY}"
               else
                 echo "::error file=head/${rel}/version.php,title=Version FAIL::Version FAIL - ${label}: was ${old}, now ${new}, did not meet the ${VERSION_POLICY} version policy"
+                echo "| ${label} | Version | FAIL - was ${old}, now ${new}, did not meet the ${VERSION_POLICY} version policy |" >> "${GITHUB_STEP_SUMMARY}"
                 failed=1
               fi
             else
               new=$(read_version "head/${rel}/version.php")
               if moodle-plugin-ci version "head/${rel}"; then
                 echo "::notice title=Version PASS::Version PASS - ${label}: new plugin, version is ${new}"
+                echo "| ${label} | Version | PASS - new plugin, version is ${new} |" >> "${GITHUB_STEP_SUMMARY}"
               else
                 echo "::error title=Version FAIL::Version FAIL - ${label}: new plugin, version ${new} did not pass the version check"
+                echo "| ${label} | Version | FAIL - new plugin, version ${new} did not pass the version check |" >> "${GITHUB_STEP_SUMMARY}"
                 failed=1
               fi
             fi
             if reason=$(php ci/.github/scripts/check-release.php "head/${rel}" --release-policy="${RELEASE_POLICY}" 2>&1); then
               echo "::notice title=Release PASS::Release PASS - ${label}: release check (policy ${RELEASE_POLICY}) passed"
+              echo "| ${label} | Release | PASS - policy ${RELEASE_POLICY} |" >> "${GITHUB_STEP_SUMMARY}"
             else
               echo "::error title=Release FAIL::Release FAIL - ${label}: ${reason}"
+              echo "| ${label} | Release | FAIL - ${reason} |" >> "${GITHUB_STEP_SUMMARY}"
               failed=1
             fi
-            echo "::endgroup::"
           done < "${RUNNER_TEMP}/plugin-dirs.txt"
           exit "${failed}"
         shell: bash
