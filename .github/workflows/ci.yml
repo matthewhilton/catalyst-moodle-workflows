@@ -312,14 +312,35 @@ jobs:
         run: |
           set -euo pipefail
           failed=0
+          read_version() {
+            grep -oP '\$plugin->version\s*=\s*\K[0-9]+' "$1" || echo "unknown"
+          }
           while IFS= read -r rel; do
-            echo "Checking ${rel}"
+            echo "::group::Checking ${rel}"
             if [ -f "base/${rel}/version.php" ]; then
-              moodle-plugin-ci version "head/${rel}" --baseline-dir "base/${rel}" --version-policy "${VERSION_POLICY}" || { echo "::error::Version check failed for ${rel}"; failed=1; }
+              old=$(read_version "base/${rel}/version.php")
+              new=$(read_version "head/${rel}/version.php")
+              if moodle-plugin-ci version "head/${rel}" --baseline-dir "base/${rel}" --version-policy "${VERSION_POLICY}"; then
+                echo "::notice file=head/${rel}/version.php,title=Version PASS::${rel} - version was ${old}, is now ${new}"
+              else
+                echo "::error file=head/${rel}/version.php,title=Version FAIL::${rel} - version was ${old}, is now ${new}. See the moodle-plugin-ci output above."
+                failed=1
+              fi
             else
-              moodle-plugin-ci version "head/${rel}" || { echo "::error::Version check failed for ${rel}"; failed=1; }
+              if moodle-plugin-ci version "head/${rel}"; then
+                echo "::notice title=Version PASS::${rel} - new plugin, no baseline to compare"
+              else
+                echo "::error title=Version FAIL::${rel} - version check failed, see the moodle-plugin-ci output above"
+                failed=1
+              fi
             fi
-            php ci/.github/scripts/check-release.php "head/${rel}" --release-policy="${RELEASE_POLICY}" || { echo "::error::Release check failed for ${rel}"; failed=1; }
+            if php ci/.github/scripts/check-release.php "head/${rel}" --release-policy="${RELEASE_POLICY}"; then
+              echo "::notice title=Release PASS::${rel}"
+            else
+              echo "::error title=Release FAIL::${rel} - see the check-release output above"
+              failed=1
+            fi
+            echo "::endgroup::"
           done < "${RUNNER_TEMP}/plugin-dirs.txt"
           exit "${failed}"
         shell: bash
